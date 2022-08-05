@@ -1,11 +1,13 @@
-# key_biogem_genes
+# Project Objective
+
 Code to evaluate the seasonality of biogeochemically relevant microbial genes in a coastal ocean microbiome. 
 
+# Project structure 
 In the `data` folder you can find: 
 
-- The FASTA sequence for each gene variant (sequences_min250.faa.zip).
-- The abundance count table for each sequence (abundance_tbl_raw.rds).
-- Taxonomy performed with GTDB and Uniref (taxonomy_gtdb.tsv | taxonomy_uniref.tsv). 
+- The FASTA sequence for each gene variant (`sequences_min250.faa.zip`).
+- The abundance count table for each sequence (`abundance_tbl_raw.rds`).
+- Taxonomy performed with GTDB and Uniref (`taxonomy_gtdb.tsv` | `taxonomy_uniref.tsv`). 
 
 In the script folder the code is organized as follows: 
 
