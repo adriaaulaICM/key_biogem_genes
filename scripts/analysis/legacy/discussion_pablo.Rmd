@@ -1,0 +1,201 @@
+---
+title: "Notes to Pablo for discussion"
+output: 
+  html_document:
+    toc: TRUE
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(root.dir=here::here())
+knitr::opts_chunk$set()
+```
+
+
+```{r data import, include=FALSE}
+
+library(here)
+library(tidyverse)
+
+source(here('scripts/analysis/sourcefiles/', 'backbone_params-graphs.R'))
+source(here('scripts/analysis/sourcefiles/', 'params_biogem.R'))
+
+
+# Data import  ------------------------------------------------------------
+ab.tbl <- read_rds(here('data/04_table_gen/', 'scglengthnorm.tbl.rds')) %>% 
+  filter(!keggid %in% scg) 
+
+colnames(ab.tbl) <-  str_replace_all(colnames(ab.tbl),
+                                     c( "BL100413" = "BL100414",
+                                        "BL110704" = "BL110705",
+                                        "BL120518" = "BL120511",
+                                        "BL131204" = "BL131215"))
+
+# Dataset with the abundance counts 
+ab.raw <- read_rds(here('data/04_table_gen/', 'lengthnorm.tbl.rds')) %>% 
+  filter(!keggid %in% scg)  
+# Descriptions and env variables 
+descriptions <- readxl::read_xlsx(here('results/summary_charact/',
+                                       'database_genes.xlsx'))
+envdata <- read_tsv(here('data/metadata-raw/',
+                         'metadata_Blanes_compact_may2017.tsv'))
+
+
+```
+
+
+# N variants too high 
+
+El nombre de variants que hem predit és massa alt per ser normal. 
+D'alguns gens obtinc fins a 20000 variants, de manera que es altament segur que tinc algun problema amb aquest tema. 
+
+Aqui una taula amb la distribució: 
+
+```{r}
+nvariants.gene <- ab.tbl %>% 
+  group_by(keggid) %>%
+  tally() %>% 
+  left_join(descriptions, by = 'keggid') %>% 
+  select(cycle, gene_name, n ) %>% 
+  arrange(cycle, gene_name, n)
+
+gt::gt(nvariants.gene)
+
+```
+
+
+### No reads recovered
+
+He vist molt clarament com moltes d'elles deuen ser un artefacte perquè...no recuperen cap read! 
+Aqui fico la taula amb la informació updated de quantes d'elles tenen com a abundancia un 0. 
+
+  
+```{r}
+counts.gene <- ab.raw %>% 
+  gather(key = 'sample', value = 'counts', -keggid, -genename) %>% 
+  group_by(genename,keggid) %>% 
+  summarize( total = sum(counts)) 
+  
+
+counts0 <- counts.gene %>%  
+  left_join(descriptions, by = 'keggid') %>% 
+  group_by( gene_name) %>% 
+  summarize( n = n(), 
+             n_0occ = sum(total == 0),
+             n.morethan1 = n - n_0occ)
+  
+counts0 %>% 
+  gt::gt()
+  
+```
+  
+Perque existeixen aquestes variants? Probablement degut a que son chimeras? Amb la Marta SEbastian ho hem parlat i diu que potser es aquest l'origen. Aquests gens provenen de Assembly -> filtering > 1000 pb -> Gene prediction (prodigal + metagenemark). 
+
+Una altra opció es que aquests valors no n agafin cap conteig perque els contejos siguin ambigus en tots els casos. Pero no hauria de ser aixi? 
+
+
+### Related to prediction with MGM? 
+
+```{r}
+
+counts.gene %>%  
+  mutate( origin = ifelse( str_detect(genename, 'mgm'), 'mgm', 'pro')) %>% 
+  left_join(descriptions, by = 'keggid') %>% 
+  group_by(origin) %>% 
+  summarize( n = n(), 
+             n_0occ = sum(total == 0),
+             n.morethan1 = n - n_0occ, 
+             ratio = (n_0occ * 100) / n )
+
+```
+
+
+No ho sembla pas a priori! 
+Per tant el problema ha de provenir d'algun altre step. 
+
+### Related to gene length?
+
+Mirant el gene lenght distribution vs counts dona alguna informació al respecte? 
+
+```{r}
+library(seqinr)
+
+fasta <- read.fasta(here('data/putative_genes', 'nuc_genes.fna'))
+
+distribution <- tibble(genename =  names(fasta),
+                       gene.length = getLength(fasta)) %>% 
+  mutate(origin = ifelse( str_detect(genename, 'mgm'), 'mgmark', 'prodigal')) 
+  
+counts.gene  %>% 
+  left_join(distribution, by = 'genename') %>% 
+  ggplot( aes( x = gene.length, y = total)) + 
+  geom_hex()
+
+```
+
+No hi ha cap relació aparent, cool. 
+
+## Proposal annotation
+
+Ara mateix, per ser més conservatiu,  havia pensat the following steps: 
+
+- Annotacio inicial amb KOFAM. Em permet filtrar rapid una part gran del dataset, i per la majoria dels gens tinc el HMM. El mètode tindrà hipotèticament FP pero no te perque (per exemple per dmdA no n'he trobat cap). 
+
+- Dels gens que tingui un COG de confiança, anotació de COG. 
+  - Nomes em quedo amb els que tinguin KOFAM + COG al 70% identitat i que els hits resultants siguin tots del mateix COG. Amb aixo soc força conservador al meu veure. 
+  
+- Els gens sense anotació perquè no tinc ni COG ni KEGG ni res, simplement faig un BLAST amb la database d'elecció i sóc molt restrictiu. 
+
+FIN
+
+# SCG problems ? 
+
+Alguns dels gens que tenies com a definits per fer el ratio analysis se'n van molt, o presenten una distribucio molt diferents als altres. 
+
+Jo els vaig treure... 
+
+També et vaig desobeir i vaig fer l'anotació amb els KOFAM per poder-ho comparar  :)
+
+I els he anotat amb KEGGs, de manera que existeix la possiblitat de que hagi fet algun error. 
+Ara això segurament ho canvii afegint l'anotació per COGs, i quedantme amb els resultats d'una manera diferent 
+Anyway, tu per Malaspina tenies algun resultat similar? O no? 
+```{r}
+scg.raw <- read_rds(here('data/04_table_gen/','lengthnorm.tbl.rds')) %>% 
+  filter(keggid %in% scg)  
+
+sctotals <- scg.raw %>% 
+  filter( keggid %in% scg) %>% 
+  gather( key = 'sample', value = 'normcount', -genename, -keggid) 
+
+sctotals %>% 
+  group_by(keggid, sample) %>% 
+  summarize( total = sum(normcount)) %>% 
+  ggplot( aes( keggid, total, fill = keggid)) + 
+  geom_violin() + 
+  geom_jitter(alpha = 0.8) + 
+  geom_hline(yintercept = 30123.3, color = 'red', linetype = 2) + 
+  coord_flip()
+
+```
+
+
+
+```{r}
+
+counts.scg <- scg.raw %>% 
+  gather(key = 'sample', value = 'counts', -keggid, -genename) %>% 
+  group_by(genename,keggid) %>% 
+  summarize( total = sum(counts)) 
+  
+
+counts0 <- counts.scg %>%  
+  group_by( keggid) %>% 
+  summarize( n = n(), 
+             n_0occ = sum(total == 0),
+             n.morethan1 = n - n_0occ)
+  
+counts0 %>% 
+  gt::gt() 
+```
+
+Is there other genes ?
+

@@ -1,0 +1,53 @@
+---
+knit: (function(inputFile, encoding) { 
+      out_dir <- 'results/tables';
+      rmarkdown::render(inputFile,
+                        encoding=encoding, 
+                        output_file=file.path(here::here(),
+                        out_dir, 'taxonomic_distro_table.html')) })
+output: html_document
+---
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(warning = FALSE, echo = FALSE, include = FALSE)
+```
+
+```{r}
+library(here)
+library(tidyverse)
+library(DT)
+```
+
+```{r}
+
+source(here('scripts/utils/backbone_params-graphs.R'))
+source(here('scripts/utils/backbone_functions.R'))
+source(here('scripts/utils/params_biogem.R'))
+
+ab.raw.filt <- read_rds(here('data/04_table_gen/abtblraw_filt0rem_8sams.rds'))
+envdata <- read_tsv(here('data/metadata-raw/metadata_Blanes_compact_may2017.tsv'))
+annot <- read_rds(here('data/intermediate_files/annotation.rds'))
+  
+tax <- readRDS(here('data/04_table_gen/taxonomy_subset.rds'))
+
+ab.mega <- ab.raw.filt %>% 
+  left_join(annot, by = 'genename') %>% 
+  left_join(envdata, by = c('sample' = 'Sample_name')) 
+
+
+gene.data <- ab.mega %>%
+  select(sample, genename, gene_name, count, month) %>% 
+  left_join(tax, by = 'genename') %>% 
+  group_by(gene_name, sample) %>% 
+  mutate(relab = count / sum(count))  %>% 
+  group_by(gene_name, phylum, class, order, family, month) %>% 
+  summarize(relab.month = sum(relab)) %>% 
+  group_by(gene_name, month) %>% 
+  mutate( relab.month = (relab.month * 100) / sum(relab.month) %>% 
+            round(digits = 1))  %>% 
+  ungroup()
+```
+
+```{r}
+datatable(gene.data)
+```
+

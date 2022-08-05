@@ -1,0 +1,133 @@
+---
+title: "Various statistics for the paper"
+output:
+  html_document:
+    df_print: paged
+---
+
+# Data import
+```{r}
+library(tidyverse)
+library(ggtext)
+library(here)
+source(here('scripts/utils/backbone_params-graphs.R'))
+source(here('scripts/utils/backbone_functions.R'))
+source(here('scripts/utils/params_biogem.R'))
+
+set.seed(42)
+
+# Data import -------------------------------------------------------------
+ab.raw.all <- read_rds(here('data/04_table_gen/abtblalr_all.rds'))
+ab.raw.filt <- read_rds(here('data/04_table_gen/abtblalr_filt0rem_8sams.rds'))
+ab.agg <- read_rds(here('data/04_table_gen/alragg.tbl.rds'))
+
+envdata <- read_tsv(here('data/metadata-raw/metadata_Blanes_compact_may2017.tsv'))
+annot <- read_rds(here('data/intermediate_files/annotation.rds'))
+descriptions <- readxl::read_xlsx(here('results/gene_info/database_genes.xlsx'))
+  
+tax <- readRDS(here('data/04_table_gen/taxonomy_subset.rds')) 
+
+lomb <- readRDS(here('data/intermediate_files/genes_seasonal.rds'))
+```
+
+```{r}
+outscg <- descriptions %>% filter(str_detect(cycle, 'scg')) %>% pull(gene_name)
+ab.agg <- ab.agg %>% filter(!gene_name %in% outscg)
+
+# Merging everything together 
+megafile.agg <-  ab.agg %>% 
+  pivot_longer( names_to = 'sample', values_to = 'logratio', -gene_name) %>% 
+  left_join(descriptions, by = 'gene_name') %>% 
+  left_join(envdata, by = c('sample' = 'Sample_name')) 
+
+```
+
+# Checking the mean abundance for each gene 
+
+```{r}
+
+megafile.agg %>% 
+  group_by(gene_name) %>% 
+  summarize( `Median ratio` = median(2 ^ logratio)) %>% 
+  arrange(-`Median ratio`)
+
+```
+
+# The same but  for each season 
+
+```{r}
+
+megafile.agg %>% 
+  group_by(gene_name, season) %>% 
+  summarize( `Median ratio` = median(2 ^ logratio)) %>% 
+  arrange(gene_name, -`Median ratio`)
+
+```
+
+# Seasonality 
+
+# Recurrence strength for aggregated genes 
+
+```{r}
+
+seasonality.agg <- read_tsv(here('results/stats/seasonality_agg.tsv')) %>% 
+  mutate( seasonal = ifelse(peak >= 8 & pval <= 0.05 & interval.start <= 1,
+                            TRUE, FALSE))
+
+seasonality.agg %>% 
+  select(gene_name, peak, interval, pval) 
+```
+
+# Number of seasonal genes 
+
+```{r}
+lomb %>% pull(genename) %>% length()
+```
+
+## Distribution of the seasonal variants maxima! 
+
+We want to know which is the most typical outcome.
+
+```{r}
+
+sel.season <- read_rds(here('data/intermediate_files/season_maxima.rds'))
+
+sel.season %>% 
+  mutate( number.seasons.max = str_detect(season, '-')) %>% 
+  group_by(number.seasons.max) %>% 
+  summarize( count = n()) %>% 
+  mutate(fraction.total = count / sum(count))
+
+```
+
+And which are the most typical gene seasons. 
+
+```{r}
+sel.season %>% 
+  group_by(season) %>% 
+  summarize( count = n()) %>% 
+  mutate(fraction.total = count / sum(count)) %>%  
+  arrange(-count)
+```
+
+# Relative abundance AAPs seasonal
+
+```{r}
+
+ab.raw.genevar <- read_rds(here('data/04_table_gen/abtblraw_filt0rem_8sams.rds'))
+
+pufm.gene.vars <- annot %>% 
+  filter(gene_name == 'pufM') %>% 
+  pull(genename)
+
+pufm.df <- ab.raw.genevar %>% 
+  filter(genename %in% pufm.gene.vars)
+
+
+pufm.df %>% 
+  mutate(sea = ifelse(genename %in% lomb$genename, TRUE, FALSE)) %>% 
+  group_by(sea) %>% 
+  summarize( total = sum(count)) %>% 
+  mutate( relab = total / sum(total))
+```
+

@@ -1,0 +1,62 @@
+---
+knit: (function(inputFile, encoding) { 
+      out_dir <- 'results/tables';
+      rmarkdown::render(inputFile,
+                        encoding=encoding, 
+                        output_file=file.path(here::here(),
+                        out_dir, 'envir_table.html')) })
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r message=FALSE, warning=FALSE, include=FALSE}
+library(here)
+library(tidyverse)
+library(kableExtra)
+library(readxl)
+source(here('scripts/utils/backbone_params-graphs.R'))
+source(here('scripts/utils/backbone_functions.R'))
+source(here('scripts/utils/params_biogem.R'))
+
+ab.agg <- read_rds(here('data/04_table_gen/alragg.tbl.rds') )
+
+
+envdata <- read_tsv(here('data/metadata-raw/metadata_Blanes_compact_may2017_old.tsv')) %>% 
+  filter( year %in% c(2009:2015)) %>%
+  select(day_of_year, month, day, season,Day_length,
+         Temperature, PO4, NH4, NO2, NO3, Chla_total,  PNF_Micro, HNF_Micro,
+         BP_FC1.55, Synechococcus, Bacteria_joint)   %>% 
+  pivot_longer(names_to = 'env',
+               values_to = 'values',
+               cols = -c(day_of_year, month, day, season))
+
+```
+
+```{r}
+envdata %>% 
+  group_by(env, season) %>% 
+  summarize( mean = mean(values, na.rm = T)) %>% 
+  pivot_wider(names_from = season, values_from = mean) %>% 
+  # to give the correct order
+  select(env, winter, spring, summer, autumn) %>% 
+  kbl(booktabs = TRUE, escape = FALSE )  %>% 
+  kable_styling(full_width = T,
+                bootstrap_options = 'striped',
+                latex_options = 'striped')
+```
+
+```{r}
+
+envdata %>% 
+  group_by(env, month) %>% 
+  summarize( mean = mean(values, na.rm = T)) %>% 
+  pivot_wider(names_from = month, values_from = mean) %>% 
+  kbl(booktabs = TRUE, escape = FALSE )  %>% 
+  kable_styling(full_width = T,
+                bootstrap_options = 'striped',
+                latex_options = 'striped')
+```
+
