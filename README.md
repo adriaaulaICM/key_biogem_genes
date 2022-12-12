@@ -7,6 +7,8 @@ In the `data` folder you can find:
 
 - The FASTA sequence for each gene variant (`sequences_min250.faa.zip`).
 - The abundance count table for each sequence (`abundance_tbl_raw.rds`).
+- A R data file (RDS) of the lomb scargle test determing the seasonality for each gene (genes_seasonal.rds).
+- The annotation of each gene variant, stating the HMM/database used and the match (annotation.tsv).
 - Taxonomy performed with GTDB and Uniref (`taxonomy_gtdb.tsv` | `taxonomy_uniref.tsv`). 
 
 In the script folder the code is organized as follows: 
